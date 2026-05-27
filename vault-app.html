@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#080810">
+<title>Vault — 私密相簿</title>
+<link rel="manifest" id="pwa-manifest">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap');
+
+  :root {
+    --bg:      #080810;
+    --surface: #111118;
+    --surface2:#1a1a24;
+    --border:  #252535;
+    --accent:  #c8a96e;
+    --accent2: #7a5fcc;
+    --text:    #ede8de;
+    --muted:   #6a6a80;
+    --danger:  #e05555;
+    --r:       14px;
+    --nav-h:   64px;
+    --safe-b:  env(safe-area-inset-bottom, 0px);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    overscroll-behavior: none;
+  }
+
+  /* ── SPLASH ── */
+  #splash {
+    position: fixed; inset: 0; z-index: 999;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 12px;
+    animation: splashFade 0.4s ease 0.8s forwards;
+    opacity: 1;
+  }
+  #splash.gone { display: none; }
+  @keyframes splashFade {
+    to { opacity: 0; pointer-events: none; }
+  }
+  .splash-icon {
+    font-size: 3.6rem;
+    animation: splashPop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards;
+    opacity: 0; transform: scale(0.6);
+  }
+  @keyframes splashPop {
+    to { opacity:1; transform:scale(1); }
+  }
+  .splash-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2rem;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+    opacity: 0;
+    animation: fadeUp 0.4s ease 0.25s forwards;
+  }
+  .splash-sub {
+    font-size: 0.72rem;
+    color: var(--muted);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0;
+    animation: fadeUp 0.4s ease 0.4s forwards;
+  }
+  @keyframes fadeUp {
+    from { opacity:0; transform:translateY(8px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+
+  /* ── APP SHELL ── */
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+
+  /* ── HEADER ── */
+  .app-header {
+    flex-shrink: 0;
+    padding: max(env(safe-area-inset-top, 16px), 16px) 18px 0;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    display: flex; flex-direction: column;
+  }
+  .header-top {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 12px;
+  }
+  .app-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.7rem;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+  }
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+
+  .icon-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 0.88rem;
+    transition: all 0.12s;
+    display: flex; align-items: center; gap: 5px;
+    font-family: 'DM Sans', sans-serif;
+    white-space: nowrap;
+  }
+  .icon-btn:active { background: var(--surface2); transform: scale(0.95); }
+  .icon-btn .btn-label { font-size: 0.72rem; color: var(--muted); }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex; gap: 2px;
+    padding: 0 2px;
+  }
+  .tab {
+    flex: 1; text-align: center;
+    padding: 10px 8px;
+    font-size: 0.78rem;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    letter-spacing: 0.02em;
+  }
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  /* ── SCROLL AREA ── */
+  .scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding-bottom: calc(var(--nav-h) + var(--safe-b) + 8px);
+  }
+
+  /* ── EMPTY STATE ── */
+  .empty-state {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 80px 32px;
+    text-align: center; gap: 10px;
+  }
+  .empty-icon { font-size: 2.8rem; opacity: 0.25; }
+  .empty-title { font-size: 0.95rem; color: var(--muted); font-weight: 500; }
+  .empty-sub { font-size: 0.75rem; color: var(--muted); opacity: 0.6; line-height: 1.7; }
+
+  /* ── PHOTO GRID ── */
+  .photo-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2px;
+    padding: 2px;
+  }
+
+  .photo-thumb {
+    aspect-ratio: 1;
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    background: var(--surface);
+    border-radius: 3px;
+  }
+  .photo-thumb img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transition: transform 0.2s;
+    display: block;
+  }
+  .photo-thumb:active img { transform: scale(0.94); }
+  .photo-thumb.selected::after {
+    content: '✓';
+    position: absolute; inset: 0;
+    background: rgba(200,169,110,0.55);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem; color: white;
+    font-weight: bold;
+  }
+  .photo-count-bar {
+    text-align: center;
+    padding: 12px 16px 4px;
+    font-size: 0.7rem;
+    color: var(--muted);
+    opacity: 0.55;
+  }
+
+  /* ── ALBUMS ── */
+  .album-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .album-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .album-card:active { transform: scale(0.96); }
+
+  .album-thumb {
+    aspect-ratio: 1;
+    background: var(--surface2);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 1px;
+    overflow: hidden;
+  }
+  .album-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+  .album-thumb .placeholder {
+    background: var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; opacity: 0.25;
+  }
+  .album-info { padding: 10px 12px; }
+  .album-name { font-size: 0.85rem; font-weight: 500; }
+  .album-count { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+
+  .new-album-card {
+    border: 2px dashed var(--border);
+    background: transparent;
+    border-radius: var(--r);
+    aspect-ratio: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    cursor: pointer; gap: 8px;
+    transition: all 0.15s;
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+  .new-album-card .plus { font-size: 1.8rem; }
+  .new-album-card:active { background: var(--surface); }
+
+  /* ── SETTINGS ── */
+  .settings-wrap { padding: 16px 14px; }
+  .settings-section { margin-bottom: 22px; }
+  .settings-label {
+    font-size: 0.68rem; color: var(--muted);
+    letter-spacing: 0.1em; text-transform: uppercase;
+    margin-bottom: 8px; padding-left: 4px;
+  }
+  .settings-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 13px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; margin-bottom: 6px;
+    transition: all 0.12s;
+  }
+  .settings-item:active { background: var(--surface2); }
+  .settings-item-left { display: flex; align-items: center; gap: 12px; }
+  .settings-icon { font-size: 1.1rem; }
+  .settings-name { font-size: 0.86rem; }
+  .settings-desc { font-size: 0.7rem; color: var(--muted); margin-top: 2px; line-height: 1.5; }
+  .settings-arrow { color: var(--muted); font-size: 1rem; }
+
+  .pwa-steps {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 14px;
+  }
+  .pwa-step {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .pwa-step:last-child { border-bottom: none; padding-bottom: 0; }
+  .pwa-step-num {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #1a1000;
+    font-size: 0.72rem;
+    font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .pwa-step-text { font-size: 0.78rem; color: var(--muted); line-height: 1.6; }
+  .pwa-step-text strong { color: var(--text); }
+
+  /* ── BOTTOM NAV ── */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: calc(var(--nav-h) + var(--safe-b));
+    background: rgba(8,8,16,0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    display: flex; align-items: flex-start;
+    padding-top: 8px;
+    z-index: 50;
+  }
+  .nav-item {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; gap: 4px;
+    cursor: pointer; padding: 4px 0;
+    transition: all 0.15s;
+  }
+  .nav-item:active { opacity: 0.6; }
+  .nav-icon { font-size: 1.3rem; transition: transform 0.15s; }
+  .nav-item.active .nav-icon { transform: scale(1.1); }
+  .nav-label {
+    font-size: 0.62rem; letter-spacing: 0.04em;
+    color: var(--muted); transition: color 0.15s;
+  }
+  .nav-item.active .nav-label { color: var(--accent); }
+
+  /* ── ADD FAB ── */
+  .fab {
+    position: fixed;
+    bottom: calc(var(--nav-h) + var(--safe-b) + 16px);
+    right: 18px;
+    width: 52px; height: 52px;
+    border-radius: 16px;
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem; color: #1a1000;
+    box-shadow: 0 4px 20px rgba(200,169,110,0.35);
+    transition: all 0.15s;
+    z-index: 40;
+  }
+  .fab:active { transform: scale(0.92); box-shadow: 0 2px 10px rgba(200,169,110,0.2); }
+  .fab.hidden { display: none; }
+
+  /* ── SELECT BAR ── */
+  .select-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    padding: max(env(safe-area-inset-top, 12px), 12px) 14px 12px;
+    display: none; align-items: center; gap: 10px;
+    z-index: 60;
+    animation: slideDown 0.2s ease;
+  }
+  @keyframes slideDown {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+  }
+  .select-bar.show { display: flex; }
+  .select-count { flex: 1; font-size: 0.82rem; color: var(--text); font-weight: 500; }
+  .sel-btn {
+    border: none; border-radius: 8px;
+    padding: 8px 14px; cursor: pointer;
+    font-size: 0.78rem; font-family: 'DM Sans', sans-serif;
+  }
+  .sel-cancel { background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
+  .sel-delete { background: rgba(224,85,85,0.15); color: var(--danger); border: 1px solid rgba(224,85,85,0.3); }
+  .sel-album  { background: rgba(200,169,110,0.12); color: var(--accent); border: 1px solid rgba(200,169,110,0.3); }
+
+  /* ── LIGHTBOX ── */
+  #lightbox {
+    position: fixed; inset: 0; z-index: 200;
+    background: #000;
+    display: none; flex-direction: column;
+  }
+  #lightbox.open { display: flex; }
+
+  .lb-header {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 10;
+    padding: max(env(safe-area-inset-top, 16px), 16px) 16px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.85), transparent);
+  }
+  .lb-close {
+    background: rgba(255,255,255,0.12);
+    border: none; border-radius: 50%;
+    width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: white; font-size: 1rem;
+  }
+  .lb-actions { display: flex; gap: 8px; }
+  .lb-btn {
+    background: rgba(255,255,255,0.12);
+    border: none; border-radius: 20px;
+    padding: 9px 16px; color: white;
+    cursor: pointer; font-size: 0.78rem;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .lb-btn.danger { background: rgba(224,85,85,0.25); color: var(--danger); }
+
+  .lb-image-wrap {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    touch-action: pinch-zoom;
+  }
+  #lb-img {
+    max-width: 100%; max-height: 100%;
+    object-fit: contain;
+  }
+  .lb-footer {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 20px 16px max(env(safe-area-inset-bottom, 16px), 20px);
+    background: linear-gradient(to top, rgba(0,0,0,0.85), transparent);
+    text-align: center;
+  }
+  .lb-name { font-size: 0.8rem; color: rgba(255,255,255,0.55); }
+  .lb-date { font-size: 0.7rem; color: rgba(255,255,255,0.3); margin-top: 3px; }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 300;
+    background: rgba(0,0,0,0.72);
+    backdrop-filter: blur(8px);
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .modal-overlay.hidden { display: none; }
+  .modal-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px 24px 0 0;
+    padding: 24px 20px max(env(safe-area-inset-bottom, 24px), 24px);
+    width: 100%; max-width: 520px;
+    animation: slideUp 0.25s ease;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+  }
+  .modal-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.2rem; color: var(--accent);
+    margin-bottom: 16px;
+  }
+  .modal-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-size: 0.9rem;
+    font-family: 'DM Sans', sans-serif;
+    margin-bottom: 14px; outline: none;
+  }
+  .modal-input:focus { border-color: var(--accent); }
+  .modal-actions { display: flex; gap: 10px; }
+  .btn-primary {
+    flex: 1; background: var(--accent); color: #1a1000;
+    border: none; border-radius: 10px; padding: 13px;
+    font-size: 0.88rem; font-weight: 500; cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .btn-secondary {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--muted); border-radius: 10px; padding: 13px 20px;
+    font-size: 0.88rem; cursor: pointer; font-family: 'DM Sans', sans-serif;
+  }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed; bottom: calc(var(--nav-h) + var(--safe-b) + 12px);
+    left: 50%; transform: translateX(-50%);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 10px 20px;
+    font-size: 0.8rem; color: var(--text);
+    z-index: 999; opacity: 0; transition: opacity 0.2s;
+    white-space: nowrap; pointer-events: none;
+  }
+  #toast.show { opacity: 1; }
+
+  #file-input { display: none; }
+
+  /* ── ALBUM ASSIGN ── */
+  .album-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  .album-check-item {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px;
+    cursor: pointer; transition: all 0.12s;
+  }
+  .album-check-item.checked { border-color: var(--accent); background: rgba(200,169,110,0.06); }
+  .album-check-item .chk { width:18px; height:18px; border-radius:5px; border:2px solid var(--border); display:flex;align-items:center;justify-content:center; font-size:0.7rem; }
+  .album-check-item.checked .chk { background:var(--accent); border-color:var(--accent); color:#1a1000; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<!-- SPLASH -->
+<div id="splash">
+  <div class="splash-icon">🔒</div>
+  <div class="splash-title">Vault</div>
+  <div class="splash-sub">私密相簿</div>
+</div>
+
+<!-- APP SHELL -->
+<div id="app">
+  <div class="app-header">
+    <div class="header-top">
+      <div class="app-title" id="header-title">Vault</div>
+      <div class="header-actions" id="header-actions">
+        <!-- dynamic -->
+      </div>
+    </div>
+    <div class="tabs" id="tabs">
+      <div class="tab active" data-tab="photos">照片</div>
+      <div class="tab" data-tab="albums">相簿</div>
+      <div class="tab" data-tab="settings">設定</div>
+    </div>
+  </div>
+
+  <div class="scroll-area" id="content"></div>
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav">
+  <div class="nav-item active" id="nav-photos" onclick="switchTab('photos')">
+    <div class="nav-icon">🖼</div>
+    <div class="nav-label">照片</div>
+  </div>
+  <div class="nav-item" id="nav-albums" onclick="switchTab('albums')">
+    <div class="nav-icon">📁</div>
+    <div class="nav-label">相簿</div>
+  </div>
+  <div class="nav-item" id="nav-settings" onclick="switchTab('settings')">
+    <div class="nav-icon">⚙️</div>
+    <div class="nav-label">設定</div>
+  </div>
+</div>
+
+<!-- FAB ADD BUTTON -->
+<label for="file-input" class="fab" id="fab">＋</label>
+
+<!-- SELECT BAR -->
+<div class="select-bar" id="select-bar">
+  <div class="select-count" id="select-count">已選 0 張</div>
+  <button class="sel-btn sel-album" onclick="openAlbumAssign()">加入相簿</button>
+  <button class="sel-btn sel-delete" onclick="deleteSelected()">刪除</button>
+  <button class="sel-btn sel-cancel" onclick="cancelSelect()">取消</button>
+</div>
+
+<!-- LIGHTBOX -->
+<div id="lightbox">
+  <div class="lb-header">
+    <button class="lb-close" onclick="closeLightbox()">✕</button>
+    <div class="lb-actions">
+      <button class="lb-btn" onclick="downloadCurrent()">💾 儲存</button>
+      <button class="lb-btn danger" onclick="deleteCurrent()">🗑 刪除</button>
+    </div>
+  </div>
+  <div class="lb-image-wrap">
+    <img id="lb-img" src="" alt="">
+  </div>
+  <div class="lb-footer">
+    <div class="lb-name" id="lb-name"></div>
+    <div class="lb-date" id="lb-date"></div>
+  </div>
+</div>
+
+<!-- MODAL: New Album -->
+<div class="modal-overlay hidden" id="album-modal">
+  <div class="modal-box">
+    <div class="modal-title">建立相簿</div>
+    <input class="modal-input" id="album-name-input" placeholder="相簿名稱" maxlength="30">
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeAlbumModal()">取消</button>
+      <button class="btn-primary" onclick="createAlbum()">建立</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Assign to Album -->
+<div class="modal-overlay hidden" id="assign-modal">
+  <div class="modal-box">
+    <div class="modal-title">加入相簿</div>
+    <div class="album-list" id="assign-list"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeAssignModal()">取消</button>
+      <button class="btn-primary" onclick="confirmAssign()">確認</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- FILE INPUT -->
+<input type="file" id="file-input" multiple accept="image/*" onchange="handleFiles(this.files)">
+
+<script>
+// ── STATE ──
+const DB_KEY = 'vault_v2';
+let state = {
+  photos: [],   // {id, name, data, date, albums:[id,...]}
+  albums: [],   // {id, name}
+  currentTab: 'photos',
+  currentAlbum: null,
+  selectMode: false,
+  selected: new Set(),
+};
+
+// ── PERSISTENCE ──
+function save() {
+  try {
+    localStorage.setItem(DB_KEY, JSON.stringify({
+      photos: state.photos,
+      albums: state.albums,
+    }));
+  } catch(e) {
+    showToast('⚠️ 儲存空間不足，請刪除部分照片');
+  }
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(DB_KEY);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    state.photos = d.photos || [];
+    state.albums = d.albums || [];
+  } catch(e) {}
+}
+load();
+
+// ── SPLASH → INIT ──
+setTimeout(() => {
+  document.getElementById('splash').classList.add('gone');
+  renderTab();
+}, 1200);
+
+// ── TABS ──
+document.getElementById('tabs').addEventListener('click', e => {
+  const tab = e.target.closest('[data-tab]');
+  if (tab) switchTab(tab.dataset.tab);
+});
+
+function switchTab(tab) {
+  state.currentTab = tab;
+  state.currentAlbum = null;
+  cancelSelect();
+
+  // tabs header
+  document.querySelectorAll('.tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tab);
+  });
+  // bottom nav
+  ['photos','albums','settings'].forEach(n => {
+    document.getElementById('nav-' + n).classList.toggle('active', n === tab);
+  });
+
+  // FAB only on photos/albums
+  document.getElementById('fab').className = 'fab' + (tab === 'settings' ? ' hidden' : '');
+  // FAB is file-input label for photos, button for albums
+  const fab = document.getElementById('fab');
+  if (tab === 'albums') {
+    fab.removeAttribute('for');
+    fab.onclick = () => document.getElementById('album-modal').classList.remove('hidden');
+  } else {
+    fab.setAttribute('for', 'file-input');
+    fab.onclick = null;
+  }
+
+  renderTab();
+}
+
+function renderTab() {
+  const c = document.getElementById('content');
+  // reset header
+  document.getElementById('header-title').textContent = state.currentAlbum
+    ? (state.albums.find(a=>a.id===state.currentAlbum)||{name:'相簿'}).name
+    : 'Vault';
+
+  const ha = document.getElementById('header-actions');
+  if (state.currentAlbum) {
+    ha.innerHTML = `<button class="icon-btn" onclick="backToAlbums()">← 返回</button>`;
+  } else if (state.currentTab === 'photos') {
+    ha.innerHTML = `<button class="icon-btn" onclick="toggleSelectMode()">☑ <span class="btn-label">選擇</span></button>`;
+  } else {
+    ha.innerHTML = '';
+  }
+
+  if (state.currentTab === 'photos') renderPhotos(c);
+  else if (state.currentTab === 'albums') renderAlbums(c);
+  else renderSettings(c);
+}
+
+// ── PHOTOS ──
+function renderPhotos(container) {
+  let photos = state.currentAlbum
+    ? state.photos.filter(p => p.albums.includes(state.currentAlbum))
+    : state.photos;
+
+  if (photos.length === 0) {
+    container.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">📷</div>
+      <div class="empty-title">${state.currentAlbum ? '此相簿沒有照片' : '尚無照片'}</div>
+      <div class="empty-sub">點擊右下角 ＋ 按鈕<br>從手機加入照片</div>
+    </div>`;
+    return;
+  }
+
+  let html = `<div class="photo-count-bar">共 ${photos.length} 張 · 長按進入選擇模式</div>`;
+  html += `<div class="photo-grid" id="photo-grid"></div>`;
+  container.innerHTML = html;
+
+  const grid = container.querySelector('#photo-grid');
+  photos.forEach((photo, i) => {
+    const div = document.createElement('div');
+    div.className = 'photo-thumb' + (state.selected.has(photo.id) ? ' selected' : '');
+    div.dataset.id = photo.id;
+    const img = document.createElement('img');
+    img.src = photo.data;
+    img.loading = 'lazy';
+    div.appendChild(img);
+
+    div.addEventListener('click', () => {
+      if (state.selectMode) toggleSelect(photo.id, div);
+      else openLightbox(i, photos);
+    });
+    div.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      if (!state.selectMode) { enterSelectMode(); }
+      toggleSelect(photo.id, div);
+    });
+    // long-press for Android
+    let pressTimer;
+    div.addEventListener('touchstart', () => {
+      pressTimer = setTimeout(() => {
+        if (!state.selectMode) enterSelectMode();
+        toggleSelect(photo.id, div);
+      }, 500);
+    }, {passive:true});
+    div.addEventListener('touchend', () => clearTimeout(pressTimer), {passive:true});
+    div.addEventListener('touchmove', () => clearTimeout(pressTimer), {passive:true});
+
+    grid.appendChild(div);
+  });
+}
+
+// ── ALBUMS ──
+function renderAlbums(container) {
+  container.innerHTML = '';
+  const grid = document.createElement('div');
+  grid.className = 'album-grid';
+
+  state.albums.forEach(album => {
+    const photos = state.photos.filter(p => p.albums.includes(album.id));
+    const card = document.createElement('div');
+    card.className = 'album-card';
+    const thumbs = photos.slice(0,4);
+    let th = '';
+    for (let i=0;i<4;i++) {
+      th += thumbs[i]
+        ? `<img src="${thumbs[i].data}" loading="lazy">`
+        : `<div class="placeholder">📷</div>`;
+    }
+    card.innerHTML = `
+      <div class="album-thumb">${th}</div>
+      <div class="album-info">
+        <div class="album-name">${album.name}</div>
+        <div class="album-count">${photos.length} 張照片</div>
+      </div>`;
+    card.onclick = () => openAlbum(album.id);
+    grid.appendChild(card);
+  });
+
+  if (state.albums.length === 0) {
+    container.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">📁</div>
+      <div class="empty-title">尚無相簿</div>
+      <div class="empty-sub">點擊右下角 ＋ 建立相簿</div>
+    </div>`;
+    return;
+  }
+
+  container.appendChild(grid);
+}
+
+function openAlbum(id) {
+  state.currentAlbum = id;
+  state.currentTab = 'photos';
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab==='photos'));
+  ['photos','albums','settings'].forEach(n => document.getElementById('nav-'+n).classList.toggle('active', n==='photos'));
+  document.getElementById('fab').setAttribute('for','file-input');
+  document.getElementById('fab').onclick = null;
+  document.getElementById('fab').className = 'fab';
+  renderTab();
+}
+
+function backToAlbums() {
+  state.currentAlbum = null;
+  switchTab('albums');
+}
+
+// ── SETTINGS ──
+function renderSettings(container) {
+  container.innerHTML = `
+    <div class="settings-wrap">
+      <div class="settings-section">
+        <div class="settings-label">儲存</div>
+        <div class="settings-item" style="cursor:default">
+          <div class="settings-item-left">
+            <div class="settings-icon">📦</div>
+            <div>
+              <div class="settings-name">已儲存照片</div>
+              <div class="settings-desc">${state.photos.length} 張 · 全部存於本機</div>
+            </div>
+          </div>
+        </div>
+        <div class="settings-item" onclick="clearAll()" style="border-color:rgba(224,85,85,0.25)">
+          <div class="settings-item-left">
+            <div class="settings-icon">🗑️</div>
+            <div>
+              <div class="settings-name" style="color:var(--danger)">清除所有資料</div>
+              <div class="settings-desc">刪除全部照片與相簿</div>
+            </div>
+          </div>
+          <div class="settings-arrow">›</div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-label">安裝為 APP（Android）</div>
+        <div class="pwa-steps">
+          <div class="pwa-step">
+            <div class="pwa-step-num">1</div>
+            <div class="pwa-step-text">用 <strong>Chrome</strong> 開啟此頁面</div>
+          </div>
+          <div class="pwa-step">
+            <div class="pwa-step-num">2</div>
+            <div class="pwa-step-text">點擊右上角 <strong>⋮ 選單</strong></div>
+          </div>
+          <div class="pwa-step">
+            <div class="pwa-step-num">3</div>
+            <div class="pwa-step-text">選擇「<strong>新增至主畫面</strong>」或「<strong>安裝應用程式</strong>」</div>
+          </div>
+          <div class="pwa-step">
+            <div class="pwa-step-num">4</div>
+            <div class="pwa-step-text">完成！從主畫面啟動即為全螢幕 APP 模式</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-label">隱私</div>
+        <div class="settings-item" style="cursor:default">
+          <div class="settings-item-left">
+            <div class="settings-icon">🔒</div>
+            <div>
+              <div class="settings-name">本機儲存</div>
+              <div class="settings-desc">所有照片僅存於本裝置<br>不上傳任何伺服器，不同步</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── LIGHTBOX ──
+let lbPhotos = [], lbIdx = 0, lbStartX = 0;
+
+function openLightbox(idx, photos) {
+  lbPhotos = photos; lbIdx = idx;
+  showLbPhoto();
+  document.getElementById('lightbox').classList.add('open');
+}
+function showLbPhoto() {
+  const p = lbPhotos[lbIdx];
+  document.getElementById('lb-img').src = p.data;
+  document.getElementById('lb-name').textContent = p.name;
+  document.getElementById('lb-date').textContent =
+    new Date(p.date).toLocaleDateString('zh-TW', {year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+function closeLightbox() { document.getElementById('lightbox').classList.remove('open'); }
+function downloadCurrent() {
+  const p = lbPhotos[lbIdx];
+  const a = document.createElement('a');
+  a.href = p.data; a.download = p.name; a.click();
+  showToast('已儲存到下載資料夾');
+}
+function deleteCurrent() {
+  const p = lbPhotos[lbIdx];
+  if (!confirm(`確定刪除「${p.name}」？`)) return;
+  state.photos = state.photos.filter(x => x.id !== p.id);
+  save();
+  lbPhotos = lbPhotos.filter(x => x.id !== p.id);
+  if (lbPhotos.length === 0) { closeLightbox(); }
+  else { lbIdx = Math.min(lbIdx, lbPhotos.length-1); showLbPhoto(); }
+  renderTab(); showToast('已刪除');
+}
+// swipe
+const lb = document.getElementById('lightbox');
+lb.addEventListener('touchstart', e => { lbStartX = e.touches[0].clientX; }, {passive:true});
+lb.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - lbStartX;
+  if (Math.abs(dx) > 50) {
+    if (dx < 0 && lbIdx < lbPhotos.length-1) { lbIdx++; showLbPhoto(); }
+    else if (dx > 0 && lbIdx > 0) { lbIdx--; showLbPhoto(); }
+  }
+}, {passive:true});
+
+// ── FILES ──
+function handleFiles(files) {
+  if (!files.length) return;
+  let count = 0, total = files.length;
+  Array.from(files).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      state.photos.unshift({
+        id: Date.now() + Math.random(),
+        name: file.name,
+        data: e.target.result,
+        date: Date.now(),
+        albums: [],
+      });
+      count++;
+      if (count === total) {
+        save(); renderTab();
+        showToast(`✓ 已加入 ${count} 張照片`);
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+  document.getElementById('file-input').value = '';
+}
+
+// ── SELECT ──
+function enterSelectMode() {
+  state.selectMode = true;
+  document.getElementById('select-bar').classList.add('show');
+  document.getElementById('fab').className = 'fab hidden';
+}
+function toggleSelectMode() {
+  if (state.selectMode) cancelSelect(); else { enterSelectMode(); renderTab(); }
+}
+function toggleSelect(id, el) {
+  if (state.selected.has(id)) { state.selected.delete(id); el.classList.remove('selected'); }
+  else { state.selected.add(id); el.classList.add('selected'); }
+  document.getElementById('select-count').textContent = `已選 ${state.selected.size} 張`;
+}
+function cancelSelect() {
+  state.selectMode = false; state.selected.clear();
+  document.getElementById('select-bar').classList.remove('show');
+  document.getElementById('fab').className = 'fab';
+  if (state.currentTab === 'photos') renderPhotos(document.getElementById('content'));
+}
+function deleteSelected() {
+  if (!state.selected.size) return;
+  if (!confirm(`確定刪除 ${state.selected.size} 張照片？`)) return;
+  state.photos = state.photos.filter(p => !state.selected.has(p.id));
+  save(); cancelSelect(); renderTab(); showToast('已刪除選取的照片');
+}
+
+// ── ALBUM ASSIGN ──
+function openAlbumAssign() {
+  if (!state.selected.size) { showToast('請先選擇照片'); return; }
+  if (!state.albums.length) {
+    showToast('尚無相簿，請先建立相簿'); return;
+  }
+  const list = document.getElementById('assign-list');
+  list.innerHTML = '';
+  state.albums.forEach(album => {
+    const item = document.createElement('div');
+    item.className = 'album-check-item';
+    item.dataset.id = album.id;
+    item.innerHTML = `<div class="chk"></div><div>${album.name}</div>`;
+    item.onclick = () => {
+      item.classList.toggle('checked');
+      item.querySelector('.chk').textContent = item.classList.contains('checked') ? '✓' : '';
+    };
+    list.appendChild(item);
+  });
+  document.getElementById('assign-modal').classList.remove('hidden');
+}
+function closeAssignModal() { document.getElementById('assign-modal').classList.add('hidden'); }
+function confirmAssign() {
+  const checked = [...document.querySelectorAll('#assign-list .album-check-item.checked')]
+    .map(el => +el.dataset.id);
+  if (!checked.length) { closeAssignModal(); return; }
+  state.photos.forEach(p => {
+    if (state.selected.has(p.id)) {
+      checked.forEach(aid => { if (!p.albums.includes(aid)) p.albums.push(aid); });
+    }
+  });
+  save(); closeAssignModal(); cancelSelect(); showToast(`已加入 ${checked.length} 個相簿`);
+}
+
+// ── ALBUM CRUD ──
+function closeAlbumModal() {
+  document.getElementById('album-modal').classList.add('hidden');
+  document.getElementById('album-name-input').value = '';
+}
+function createAlbum() {
+  const name = document.getElementById('album-name-input').value.trim();
+  if (!name) return;
+  state.albums.push({ id: Date.now(), name });
+  save(); closeAlbumModal(); renderTab();
+  showToast(`相簿「${name}」已建立`);
+}
+document.getElementById('album-modal').onclick = function(e) {
+  if (e.target === this) closeAlbumModal();
+};
+document.getElementById('assign-modal').onclick = function(e) {
+  if (e.target === this) closeAssignModal();
+};
+
+// ── MISC ──
+function clearAll() {
+  if (!confirm('確定要清除所有照片與相簿？此操作無法復原。')) return;
+  state.photos = []; state.albums = [];
+  save(); renderTab(); showToast('已清除所有資料');
+}
+
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+// ── PWA MANIFEST (inline) ──
+const manifest = {
+  name: "Vault 私密相簿",
+  short_name: "Vault",
+  description: "私密照片保險箱",
+  start_url: "./",
+  display: "standalone",
+  background_color: "#080810",
+  theme_color: "#080810",
+  orientation: "portrait",
+  icons: [
+    { src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='40' fill='%23111118'/><text y='130' x='30' font-size='120'>🔒</text></svg>", sizes: "192x192", type: "image/svg+xml" },
+    { src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='100' fill='%23111118'/><text y='360' x='70' font-size='320'>🔒</text></svg>", sizes: "512x512", type: "image/svg+xml" }
+  ]
+};
+const blob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+document.getElementById('pwa-manifest').href = URL.createObjectURL(blob);
+
+// ── SERVICE WORKER (for offline) ──
+if ('serviceWorker' in navigator) {
+  const swCode = `
+    const CACHE = 'vault-v1';
+    self.addEventListener('install', e => {
+      e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./', './index.html'])));
+      self.skipWaiting();
+    });
+    self.addEventListener('fetch', e => {
+      e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+    });
+  `;
+  const swBlob = new Blob([swCode], {type:'application/javascript'});
+  const swUrl = URL.createObjectURL(swBlob);
+  navigator.serviceWorker.register(swUrl).catch(()=>{});
+}
+</script>
+</body>
+</html>
